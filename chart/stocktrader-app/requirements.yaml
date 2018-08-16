@@ -1,0 +1,19 @@
+dependencies:
+  - name: loyalty-level
+    repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+    version: 1.0.0
+  - name: messaging
+    repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+    version: 1.0.0
+  - name: notification-twitter
+    repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+    version: 1.0.0
+  - name: portfolio
+    repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+    version: 1.0.0
+  - name: stock-quote
+    repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+    version: 1.0.0
+  - name: trader
+    repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+    version: 1.0.0
