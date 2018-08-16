@@ -1,0 +1,316 @@
+#################################################################################################
+#                                           ROUTE                                               #
+#                                                                                               #
+# Based on the following attributes, Helm will install the notification-twitter microsercive or #
+# the notification-slack microservice with their appropriate kubernetes resources.              #
+# They are MUTUALLY EXCLUSIVE. That is, enable only one of them.                                #
+#################################################################################################
+route:
+  slack:
+    enabled: false
+  twitter:
+    enabled: false
+
+#################################################################################################
+#                                          SECRETS                                              #
+#                                                                                               #
+# These secrets will hold the configuration for the IBM StockTrader Application components.     #
+# These values will be passed to their individual Helm charts which will, in turn, make them    #
+# available at runtime to the application components.                                           #
+#################################################################################################
+
+secret:
+
+  ####### Middleware #######
+
+  db:
+    # Uses the default values specified in the db2_values.yaml file in the installation/middleware folder
+    create: true
+    secret_name: stocktrader-db2
+    # db: STOCKTRD
+    db: U1RPQ0tUUkQ=
+    # host: st-db2-ibm-db2oltp-dev-db2
+    host: c3QtZGIyLWlibS1kYjJvbHRwLWRldi1kYjI=
+    # id: db2inst1
+    id: ZGIyaW5zdDE=
+    # port: 50000
+    port: NTAwMDA=
+    # pwd: stocktraderdb
+    pwd: c3RvY2t0cmFkZXJkYg==
+
+  mq:
+    # Uses the default values specified in the mq_values.yaml file in the installation/middleware folder
+    create: true
+    secret_name: stocktrader-mq
+    # id: app
+    id: YXBw
+    pwd:
+    # host: st-mq-ibm-mq
+    host: c3QtbXEtaWJtLW1x
+    # port: 1414
+    port: MTQxNA==
+    # channel: DEV.APP.SVRCONN
+    channel: REVWLkFQUC5TVlJDT05O
+    # queue-manager: trader
+    queue_manager: dHJhZGVy
+    # queue: NotificationQ
+    queue: Tm90aWZpY2F0aW9uUQ==
+
+  redis:
+    # Uses the default values specified in the redis_values.yaml file in the installation/middleware folder
+    create: true
+    secret_name: stocktrader-redis
+    # redis://x:redispasswd@st-redis-master:6379
+    url: cmVkaXM6Ly94OnJlZGlzcGFzc3dkQHN0LXJlZGlzLW1hc3Rlcjo2Mzc5
+
+  odm:
+    # Uses the default values specified in the odm_values.yaml file in the installation/middleware folder
+    create: true
+    secret_name: stocktrader-odm
+    # url: http://st-odm-ibm-odm-dev:9060/DecisionService/rest/ICP_Trader_Dev_1/determineLoyalty
+    url: aHR0cDovL3N0LW9kbS1pYm0tb2RtLWRldjo5MDYwL0RlY2lzaW9uU2VydmljZS9yZXN0L0lDUF9UcmFkZXJfRGV2XzEvZGV0ZXJtaW5lTG95YWx0eQ==
+
+  ####### JWT #######
+
+  jwt:
+    # Uses default values for the IBM StockTrader application
+    create: true
+    secret_name: stocktrader-jwt
+    # audience: stock-trader
+    audience: c3RvY2stdHJhZGVy
+    # issuer: http://stock-trader.ibm.com
+    issuer: aHR0cDovL3N0b2NrLXRyYWRlci5pYm0uY29t
+
+  ####### IBMid #######
+
+  oidc:
+    # Open ID Connect configuration for the BFF microservices to use the IBMid service
+    # To set the IBMid up: https://w3-connections.ibm.com/wikis/home?lang=en-us#!/wiki/BlueID%20Single%20Sign-On%20%28SSO%29%20Self-Boarding%20Process/page/SSO%20with%20blueID%20%28IBM%20ID%29
+    create: true
+    secret_name: stocktrader-oidc
+    # auth: https://idaas.iam.ibm.com/idaas/oidc/endpoint/default/authorize
+    auth: aHR0cHM6Ly9pZGFhcy5pYW0uaWJtLmNvbS9pZGFhcy9vaWRjL2VuZHBvaW50L2RlZmF1bHQvYXV0aG9yaXpl
+    # Your IBMid SSO ClientId
+    id:
+    # issuer: https://idaas.iam.ibm.com
+    issuer: aHR0cHM6Ly9pZGFhcy5pYW0uaWJtLmNvbQ==
+    # Points to an entry in the keystore for the key to encrypt communications
+    # to the IBMid server. As a result, we can only configure the IBMid production server.
+    # key: blueidprod.
+    key: Ymx1ZWlkcHJvZA==
+    # name: IBMid
+    name: SUJNaWQ=
+    # Callback host. This is the redirect URI the Trader BFF microservice sends with
+    # its requests. This redirect URI must be configured in the IBMid SSO Client Configuration.
+    # The redirect URI looks like:
+    # https://<ICP_proxy_ip>
+    nodeport:
+    # Your IBMid SSO clientSecret
+    secret:
+    # token: https://idaas.iam.ibm.com/idaas/oidc/endpoint/default/token
+    token: aHR0cHM6Ly9pZGFhcy5pYW0uaWJtLmNvbS9pZGFhcy9vaWRjL2VuZHBvaW50L2RlZmF1bHQvdG9rZW4=
+
+  ####### Tradr microservice #######
+
+  # This secret will hold the redirect uri the Tradr microservice will send to the IBMid.
+  ingress_host:
+    create: true
+    secret_name: stocktrader-ingress-host
+    # Callback host. This is the redirect URI the Tradr BFF microservice sends with
+    # its requests. This redirect URI must be configured in the IBMid SSO Client Configuration.
+    # The redirect URI is simply the ICP proxy ip
+    # host: <ICP_proxy_ip>
+    host:
+
+  ####### Twitter #######
+
+  # In order to get notifications posted to Twitter, you mush have a Twitter accound and
+  # a Twitter app: https://developer.twitter.com/en/docs/basics/getting-started
+  twitter:
+    create: true
+    secret_name: stocktrader-twitter
+    consumerKey:
+    consumerSecret:
+    accessToken:
+    accessTokenSecret:
+
+  ####### Slack #######
+
+  # In order to get notifications posted to Slack, you must configure IBM Cloud Functions
+  # in your IBM Cloud account: https://www.ibm.com/developerworks/community/blogs/5092bd93-e659-4f89-8de2-a7ac980487f0/entry/Serverless_computing_and_OpenWhisk?lang=en
+  openwhisk:
+    create: true
+    secret_name: stocktrader-openwhisk
+    url:
+    id:
+    pwd:
+
+  ####### IBM Watson Services #######
+
+  watson:
+    # Uses the default values for the IBM StockTrader application except from your Watson credentials.
+    create: true
+    secret_name: stocktrader-watson
+    # url: https://gateway.watsonplatform.net/tone-analyzer/api/v3/tone?version=2017-09-21&sentences=false
+    url: aHR0cHM6Ly9nYXRld2F5LndhdHNvbnBsYXRmb3JtLm5ldC90b25lLWFuYWx5emVyL2FwaS92My90b25lP3ZlcnNpb249MjAxNy0wOS0yMSZzZW50ZW5jZXM9ZmFsc2U=
+    # Get your credentials at https://console.bluemix.net/catalog/services/tone-analyzer
+    id:
+    pwd:
+
+#################################################################################################
+#                                        DEPLOYMENTS                                            #
+#                                                                                               #
+# The below values hold the way the IBM StockTrader Application components deployment need to   #
+# be carried out and configured. There is no need to change/modify any of the below.            #
+#################################################################################################
+
+messaging:
+  replicaCount: 1
+  revisionHistoryLimit: 1
+  image:
+    repository: ibmstocktrader
+    name: messaging
+    tag: latest
+    pullPolicy: Always
+    containerPort:
+      http: 9080
+      https: 9443
+    resources:
+      requests:
+        cpu: 200m
+        memory: 300Mi
+
+###########################################
+
+notification-twitter:
+  replicaCount: 1
+  revisionHistoryLimit: 1
+  image:
+    repository: ibmstocktrader
+    name: notification-twitter
+    tag: latest
+    pullPolicy: Always
+    containerPort:
+      http: 9080
+      https: 9443
+    resources:
+      requests:
+        cpu: 200m
+        memory: 300Mi
+  service:
+    type: ClusterIP
+    servicePort:
+      http: 9080
+      https: 9443
+
+###########################################
+
+notification-slack:
+  replicaCount: 1
+  revisionHistoryLimit: 1
+  image:
+    repository: ibmstocktrader
+    name: notification-slack
+    tag: latest
+    pullPolicy: Always
+    containerPort:
+      http: 9080
+      https: 9443
+    resources:
+      requests:
+        cpu: 200m
+        memory: 300Mi
+  service:
+    type: ClusterIP
+    servicePort:
+      http: 9080
+      https: 9443
+
+###########################################
+
+portfolio:
+  replicaCount: 1
+  revisionHistoryLimit: 1
+  image:
+    repository: ibmstocktrader
+    name: portfolio
+    tag: latest
+    pullPolicy: Always
+    containerPort:
+      http: 9080
+      https: 9443
+    resources:
+      requests:
+        cpu: 200m
+        memory: 300Mi
+  service:
+    type: ClusterIP
+    servicePort:
+      http: 9080
+      https: 9443
+
+###########################################
+
+stock-quote:
+  replicaCount: 1
+  revisionHistoryLimit: 1
+  image:
+    repository: ibmstocktrader
+    name: stock-quote
+    tag: latest
+    pullPolicy: Always
+    containerPort:
+      http: 9080
+      https: 9443
+    resources:
+      requests:
+        cpu: 200m
+        memory: 300Mi
+  service:
+    type: ClusterIP
+    servicePort:
+      http: 9080
+      https: 9443
+
+###########################################
+
+trader:
+  replicaCount: 1
+  revisionHistoryLimit: 1
+  image:
+    repository: ibmstocktrader
+    name: trader
+    tag: latest
+    pullPolicy: Always
+    containerPort:
+      http: 9080
+      https: 9443
+    resources:
+      requests:
+        cpu: 200m
+        memory: 300Mi
+  service:
+    type: ClusterIP
+    servicePort:
+      http: 9080
+      https: 9443
+
+###########################################
+
+tradr:
+  replicaCount: 1
+  revisionHistoryLimit: 1
+  image:
+    repository: ibmstocktrader
+    name: tradr
+    tag: latest
+    pullPolicy: Always
+    containerPort: 3000
+    resources:
+      requests:
+        cpu: 200m
+        memory: 300Mi
+  service:
+    type: ClusterIP
+    servicePort:
+      port:
