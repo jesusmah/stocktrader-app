@@ -1,24 +1,24 @@
 dependencies:
 - name: messaging
-  repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+  repository: https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts
   version: 1.0.0
 - name: notification-slack
-  repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+  repository: https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts
   version: 1.0.0
 - name: notification-twitter
-  repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+  repository: https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts
   version: 1.0.0
 - name: portfolio
-  repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+  repository: https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts
   version: 2.0.0
 - name: stock-quote
-  repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+  repository: https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts
   version: 1.0.0
 - name: trader
-  repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+  repository: https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts
   version: 2.0.0
 - name: tradr
-  repository: https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+  repository: https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts
   version: 1.0.0
-digest: sha256:01118541c112d0a56cc6e713db5dd67b33138227b9c86f6c9561d7258c8b536c
-generated: 2018-07-26T13:22:41.854698+02:00
+digest: sha256:733798053f3c30bbd4fa0fb282e3950f7e4cde47b4a9056cf3621e7f6e860a07
+generated: 2018-09-06T10:35:25.965258+02:00
