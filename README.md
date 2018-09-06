@@ -510,7 +510,7 @@ The `curl` request should return a **SILVER** loyalty on a JSON obsect similar t
 
 ### Application
 
-The IBM StockTrader Application can be deployed to IBM Cloud Private (ICP) using Helm charts. All the microservices that make up the application have been packaged into a Helm chart. They could be deployed individually using their Helm chart or they all can be deployed at once using the main umbrella IBM StockTrader Application Helm chart which is stored in this repository under the **chart/stocktrader-app** folder. This Helm chart, along with each IBM StockTrader Application microservice's Helm chart, is latter packaged and stored in the IBM StockTrader Helm chart repository at https://github.com/jesusmah/stocktrader-helm-repo/
+The IBM StockTrader Application can be deployed to IBM Cloud Private (ICP) using Helm charts. All the microservices that make up the application have been packaged into a Helm chart. They could be deployed individually using their Helm chart or they all can be deployed at once using the main umbrella IBM StockTrader Application Helm chart which is stored in this repository under the **chart/stocktrader-app** folder. This Helm chart, along with each IBM StockTrader Application microservice's Helm chart, is latter packaged and stored in the IBM StockTrader Helm chart repository at https://github.com/ibm-cloud-architecture/stocktrader-helm-repo/
 
 As we have done for the middleware pieces installed on the previous section, the IBM StockTrader Application installation will be done by passing the desired values/configuration for some its components through a values file called [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml). This way, the IBM StockTrader Application Helm chart is the template/structure/recipe of what components and Kubernetes resources the IBM StockTrader Application is made up of while the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file specifies the configuration these need to take based on your credentials, environments, needs, etc.
 
@@ -660,12 +660,12 @@ Now that we are sure our configuration [st_app_values_v2.yaml](installation/appl
 1. Add the IBM StockTrader Helm repository:
 
 ```
-$ helm repo add stocktrader https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts
+$ helm repo add stocktrader https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts
 $ helm repo list
 NAME                    	URL                                                                                                      
 stable                  	https://kubernetes-charts.storage.googleapis.com                                                         
 local                   	http://127.0.0.1:8879/charts                                                                             
-stocktrader                      	https://raw.githubusercontent.com/jesusmah/stocktrader-helm-repo/master/docs/charts                      
+stocktrader                      	https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-helm-repo/master/docs/charts                      
 ibm-charts              	https://raw.githubusercontent.com/IBM/charts/master/repo/stable/  
 ```
 
