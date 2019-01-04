@@ -1,0 +1,18 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  labels:
+    app: ibm-odm-dev
+    chart: ibm-odm-dev-2.0.0
+    heritage: Tiller
+    release: st-odm
+  name: st-odm-ibm-odm-dev
+  namespace: stocktrader
+spec:
+  port:
+    targetPort: 9060
+  tls:
+    termination: edge
+  to:
+    kind: Service
+    name: st-odm-ibm-odm-dev

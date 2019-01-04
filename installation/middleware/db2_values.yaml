@@ -17,7 +17,7 @@ global:
 arch: ""
 image:
   repository: store/ibmcorp/db2_developer_c
-  tag: 11.1.3.3
+  tag: 11.1.4.4
   pullPolicy: IfNotPresent
 service:
   name: ibm-db2oltp-dev
@@ -29,21 +29,21 @@ db2inst:
   password: "stocktraderdb"
 options:
   databaseName: "STOCKTRD"
-  oracleCompatibility: "false"
+  oracleCompatibility: false
 
 ## global persistence settings
 persistence:
-  enabled: true
-  useDynamicProvisioning: true
+  enabled: false
+  useDynamicProvisioning: false
 
 ## hadr option
 hadr:
   enabled: false
-  useDynamicProvisioning: true
+  useDynamicProvisioning: false
 
 ## Persistence parameters for /database
 dataVolume:
-  name: "st-db2-pvc"
+  name: "data-stor"
 
   ## Specify the name of the Existing Claim to be used by your application
   ## empty string means don't use an existClaim
@@ -51,7 +51,7 @@ dataVolume:
 
   ## Specify the name of the StorageClass
   ## empty string means don't use a StorageClass
-  storageClassName: "glusterfs"
+  storageClassName: ""
   size: 10Gi
 
 etcdVolume:

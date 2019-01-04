@@ -1,4 +1,4 @@
-# IBM StockTrader Application Version 2
+# IBM StockTrader Application Version 2 (ICP + RHOS)
 
 1.  [Introduction](#introduction)
 2.  [Installation](#installation)
@@ -19,25 +19,27 @@
 
 ## Introduction
 
-This branch contains the IBM StockTrader Application Version 2 Helm chart which integrates with the IBM Operational Decision Manager (ODM) as well as with other IBM Cloud Public and third parties services.
+This branch contains the instructions to install the IBM StockTrader Application Version 2 on IBM Cloud Private (ICP) which, in turn, goes on top of the RedHat OpenShift Container Platform (OCP).
 
 The overall architecture looks like the following diagram:
 
 <p align="center">
-<img alt="st-v2" src="images/stocktrader_v2_no_numbers.png"/>
+<img alt="st-v2" src="images/stocktrader_v2_rhos.png"/>
 </p>
 
-Where you can find StockTrader specific microservices in blue and IBM middleware in purple all running on IBM Cloud Private (ICP), IBM Cloud Public services in green and other third party applications in other different colours.
+Where you can find the StockTrader application's specific microservices in blue and the IBM middleware it integrates with in purple all of them running on IBM Cloud Private (ICP), IBM Cloud Public services in green and other third party applications in other different colours.
 
 ## Installation
 
 As shown in the IBM StockTrader Application architecture diagram above, the IBM StockTrader Application environment within IBM Cloud Private (ICP) is made up of IBM middleware such as **IBM DB2**, **IBM MQ** and **IBM ODM**, third party applications like **Redis** and the IBM StockTrader Application microservices **Trader**, **Tradr**, **Portfolio**, **Stock-quote**, **Messaging**, **Notification-Twitter** and **Notification-Slack** (last two being, unfortunately, mutually exclusive for now).
 
-In this section, we will outline the steps needed in order to get the aforementioned components installed into IBM Cloud Private (ICP) so that we have a complete functioning IBM StockTrader Application to carry out our test on. We will try to use as much automation as possible as well as Helm charts for installing as many components as possible. Most of this components require a post-installation configuration and tuning too.
+In this section, we will outline the steps needed in order to get the aforementioned components installed into IBM Cloud Private (ICP). We will try to use as much automation as possible as well as Helm charts for installing as many components as possible. Most of these components require post-installation configuration.
 
-**IMPORTANT:** The below installation steps will create Kubernetes resources with names and configurations that the IBM StockTrader Helm chart expects. Therefore, if any of these is changed, the IBM StockTrader Helm installation configuration/details will need to be modified accordingly.
+**IMPORTANT:** The below installation steps will create Kubernetes resources with names and configurations that the IBM StockTrader Helm chart expects. Therefore, if any of these is changed, the IBM StockTrader Helm chart installation configuration/details will need to be modified accordingly.
 
-Finally, most of the installation process will be carried out by using the IBM Cloud Private (ICP) CLI. Follow this [link](https://www.ibm.com/support/knowledgecenter/en/SSBS6K_2.1.0.3/manage_cluster/icp_cli.html) for the installation instructions.
+Finally, most of the installation process will be carried out by using the IBM Cloud Private CLI (`cloudctl`). Follow this [link](https://www.ibm.com/support/knowledgecenter/en/SSBS6K_3.1.0/manage_cluster/install_cli.html) for the installation instructions.
+
+Also, bear in mind that the `cloudctl` CLI might get the Kubernetes Server API port incorrectly set in `~/.kube/config`. Check this [link](https://github.ibm.com/IBMPrivateCloud/roadmap/issues/18396) out for further information.
 
 ### Get The Code
 
@@ -53,34 +55,54 @@ Receiving objects: 100% (163/163), 8.94 MiB | 1.06 MiB/s, done.
 Resolving deltas: 100% (73/73), done.
 ```
 
-Afterwards, change directory to `stocktrader-app` and checkout the stocktrader-app github repository v2 branch:
+Afterwards, change directory to `stocktrader-app` and checkout the stocktrader-app github repository **v2_rhos** branch:
 
 ```
-$ git checkout v2
-Switched to branch 'v2'
-Your branch is up to date with 'origin/v2'.
+$ git checkout v2_rhos
+Switched to branch 'v2_rhos'
+Your branch is up to date with 'origin/v2_rhos'.
 ```
 
 ### Platform
 
-1. Create a namespace called **stocktrader**. If you don't know how to do so, follow this [link](https://www.ibm.com/support/knowledgecenter/en/SSBS6K_2.1.0.3/user_management/create_project.html).
+[github issue](https://github.ibm.com/IBMPrivateCloud/roadmap/issues/19086)
+1. Allow your RedHat OpenShift Container Platform cluster to pull images from [docker.io](https://docker.io):
+   1. ssh into each master and worker nodes and execute the following to add docker.io as a trusted docker registry:
+   ```
+   $ sed -i "s/ADD_REGISTRY.*$/ADD_REGISTRY=\'--add-registry docker.io --add-registry registry.access.redhat.com\'/g" /etc/sysconfig/docker
+   ```
+   2. restart docker:
+   ```
+   $ systemctl restart docker
+   ```
 
-2. Change your kubernetes CLI context to work against your **stocktrader** namespace:
+[github issue](https://github.ibm.com/IBMPrivateCloud/roadmap/issues/19165)
+2. [Taint your master nodes](https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/#concepts) so that the workloads you deploy get scheduled to the worker nodes only:
 
 ```
-$ kubectl config set-context cluster.local-context --user=admin --namespace=stocktrader
-Context "cluster.local-context" modified.
+kubectl taint nodes <MASTER_NODE> dedicated=infra:NoSchedule
 ```
-_Use the appropriate user in the above command_
 
-3. Give privileged permissions to your recently created namespace as some the IBM middleware need them to function:
+3. [Create a namespace](https://www.ibm.com/support/knowledgecenter/en/SSBS6K_3.1.0/user_management/create_project.html) called **stocktrader**:
 
 ```
-$ kubectl create rolebinding -n stocktrader st-rolebinding --clusterrole=privileged  --serviceaccount=stocktrader:default
-rolebinding "st-rolebinding" created
-$ kubectl get rolebindings                 
-NAME             KIND                                       SUBJECTS
-st-rolebinding   RoleBinding.v1.rbac.authorization.k8s.io   1 item(s)
+$ kubectl create namespace stocktrader
+namespace "stocktrader" created
+```
+
+4. [Target your IBM Cloud Private CLI](https://www.ibm.com/support/knowledgecenter/en/SSBS6K_3.1.0/manage_cluster/cli_commands.html#target) to work against your **stocktrader** namespace:
+
+```
+$ cloudctl target -n stocktrader
+
+Namespace:   stocktrader
+```
+
+5. Create a [Service Account](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/) your middleware will get deployed on behalf of:
+
+```
+$ kubectl create serviceaccount stocktrader-sa -n stocktrader
+serviceaccount "stocktrader-sa" created
 ```
 
 ### Middleware
@@ -90,6 +112,7 @@ As previously said, IBM middleware will be installed using Helm charts as much a
 ```
 $ helm repo add ibm-charts https://raw.githubusercontent.com/IBM/charts/master/repo/stable/
 "ibm-charts" has been added to your repositories
+
 $ helm repo list
 NAME                    	URL                                                                                                      
 stable                  	https://kubernetes-charts.storage.googleapis.com                                                         
@@ -120,36 +143,66 @@ default-token-t92bq   kubernetes.io/service-account-token   3         51d
 st-docker-registry    kubernetes.io/dockercfg               1         28s
 ```
 
-2. Install IBM Db2 Developer-C Edition using the [db2_values.yaml](installation/middleware/db2_values.yaml) file:
+2. Change to the following directory to find the configuration yaml files that will be used during the IBM DB2 installation:
+
+```
+$ cd <PATH_WHERE_YOU_CLONED>/stocktrader-app/installation/middleware
+```
+
+3. IBM DB2 needs privileged kernel permissions in order to run. In order to get IBM DB2 those privileges, we meed to create the appropriate [Pod Security Policy](https://kubernetes.io/docs/concepts/policy/pod-security-policy/) to be bound to the target namespace prior to installation:
+
+```
+$ kubectl apply -f db2_psp.yaml -n stocktrader
+podsecuritypolicy "db2-psp" created
+```
+
+3. Create the role to use the Pod Security Policy just created:
+
+```
+$ kubectl -n stocktrader create role db2-role --verb=use --resource=podsecuritypolicy --resource-name=db2-psp
+role "db2-role" created
+```
+
+4. Create the role binding to assign the role created above that uses the Pod Security Policy created for db2 to the stocktrader service account:
+
+```
+$ kubectl -n stocktrader create rolebinding stocktrader-sa-db2-role --role=db2-role --serviceaccount=stocktrader:stocktrader-sa
+rolebinding "stocktrader-sa-db2-role" created
+```
+
+5. As we are running ICP on top of RedHat OpenShift Container Platform, we need to give IBM DB2 the kernel privileges it needs to run at the OpenShift level as well. For doing so we need to create the following [Security Context Constraint](https://docs.openshift.com/container-platform/3.4/admin_guide/manage_scc.html):
+
+```
+$ oc apply -f db2_scc.yaml -n stocktrader
+securitycontextconstraints.security.openshift.io/db2-scc created
+```
+
+6. Install IBM Db2 Developer-C Edition using the [db2_values.yaml](installation/middleware/db2_values.yaml) file:
 
 ```
 $ helm install -n st-db2 --namespace stocktrader --tls ibm-charts/ibm-db2oltp-dev -f db2_values.yaml
 NAME:   st-db2
-LAST DEPLOYED: Wed Jun 27 18:49:04 2018
+LAST DEPLOYED: Thu Jan  3 20:07:00 2019
 NAMESPACE: stocktrader
 STATUS: DEPLOYED
 
 RESOURCES:
 ==> v1/Secret
 NAME                    TYPE    DATA  AGE
-st-db2-ibm-db2oltp-dev  Opaque  1     5s
-
-==> v1/PersistentVolumeClaim
-NAME               STATUS   VOLUME     CAPACITY  ACCESS MODES  STORAGECLASS  AGE
-st-db2-st-db2-pvc  Pending  glusterfs  5s
+st-db2-ibm-db2oltp-dev  Opaque  1     2s
 
 ==> v1/Service
-NAME                        TYPE       CLUSTER-IP   EXTERNAL-IP  PORT(S)                                  AGE
-st-db2-ibm-db2oltp-dev-db2  NodePort   10.10.10.83  <none>       50000:32329/TCP,55000:31565/TCP          5s
-st-db2-ibm-db2oltp-dev      ClusterIP  None         <none>       50000/TCP,55000/TCP,60006/TCP,60007/TCP  5s
+NAME                        TYPE       CLUSTER-IP       EXTERNAL-IP  PORT(S)                                  AGE
+st-db2-ibm-db2oltp-dev-db2  NodePort   192.168.128.145  <none>       50000:32578/TCP,55000:32634/TCP          2s
+st-db2-ibm-db2oltp-dev      ClusterIP  None             <none>       50000/TCP,55000/TCP,60006/TCP,60007/TCP  2s
 
 ==> v1beta2/StatefulSet
 NAME                    DESIRED  CURRENT  AGE
-st-db2-ibm-db2oltp-dev  1        1        5s
+st-db2-ibm-db2oltp-dev  1        1        2s
 
 ==> v1/Pod(related)
-NAME                      READY  STATUS   RESTARTS  AGE
-st-db2-ibm-db2oltp-dev-0  0/1    Pending  0         4s
+NAME                      READY  STATUS             RESTARTS  AGE
+st-db2-ibm-db2oltp-dev-0  0/1    ContainerCreating  0         2s
 
 
 NOTES:
@@ -159,8 +212,6 @@ NOTES:
   echo jdbc:db2://$NODE_IP:$NODE_PORT/sample
 ```
 
-**Important:** This will install the non HA version of IBM Db2 Developer-C Edition with persistent storage using GlusterFS. If you don't have GlusterFS you can always install IBM DB2 without persistent storage by setting the persistence flag to false: `$ helm install -n st-db2 --namespace stocktrader --tls ibm-charts/ibm-db2oltp-dev -f db2_values.yaml --set persistence.enabled=false`
-
 The command above will take few minutes at least. Monitor the recently created Db2 Developer-C Edition pod, which in our case is called `st-db2-ibm-db2oltp-dev-0`, until you see the following messages:
 
 ```
@@ -169,7 +220,7 @@ The command above will take few minutes at least. Monitor the recently created D
 ```
 At this point we can be sure the IBM Db2 Developer-C Edition and the **STOCKTRD** database have successfully been installed and created respectively.
 
-3. Now, we need to create the appropriate structure in the **STOCKTRD** database that the IBM StockTrader Application needs. We do so by initialising the database with the [initialise_stocktrader_db_v2.yaml](installation/middleware/initialise_stocktrader_db_v2.yaml) file:
+7. Now, we need to create the appropriate structure in the **STOCKTRD** database that the IBM StockTrader Application needs. We do so by initialising the database with the [initialise_stocktrader_db_v2.yaml](installation/middleware/initialise_stocktrader_db_v2.yaml) file:
 
 ```
 $ kubectl apply -f initialise_stocktrader_db_v2.yaml
@@ -186,51 +237,61 @@ NAME                        DESIRED   SUCCESSFUL   AGE
 initialise-stocktrader-db   1         1            4m
 ```
 
-_(\*)The following step is optional. It only makes sense if the IBM StockTrader Application is being installed due to the IBM Cloud Private (ICP) application resiliency work in [here](https://github.com/ibm-cloud-architecture/stocktrader-resiliency)_
-
-4. Finally, we are going to download few util scripts into the IBM Db2 Developer-C recently created container that our resiliency test scripts will make use of as explained in the [test section](https://github.com/ibm-cloud-architecture/stocktrader-resiliency#test) of the IBM StockTrader Application resiliency GitHub repo:
-
-```
-$ kubectl exec `kubectl get pods | grep ibm-db2oltp-dev | awk '{print $1}'` \
-        -- bash -c "yum -y install wget && cd /tmp && wget https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-resiliency/master/test/export.sh \
-        && wget https://raw.githubusercontent.com/ibm-cloud-architecture/stocktrader-resiliency/master/test/users.sh && chmod 777 export.sh users.sh"
-```
-
-Make sure the scripts have been successfully download:
-
-```
-$ kubectl exec `kubectl get pods | grep ibm-db2oltp-dev | awk '{print $1}'` -- bash -c "ls -all /tmp | grep sh"
--rwxrwxrwx. 1 root     root         139 Jun 27 17:48 export.sh
--rwxrwxrwx. 1 root     root          98 Jun 27 17:48 users.sh
-```
-
 #### IBM MQ
 
-1. Install MQ using the [mq_values.yaml](installation/middleware/mq_values.yaml) file:
+1. Change to the following directory to find the configuration yaml files that will be used during the IBM MQ installation:
+
+```
+$ cd <PATH_WHERE_YOU_CLONED>/stocktrader-app/installation/middleware
+```
+
+2. IBM MQ also requires a [Pod Security Policy](https://kubernetes.io/docs/concepts/policy/pod-security-policy/) to be bound to the target namespace prior to installation in order to allow IBM MQ the use of ceratain system capabilities:
+
+```
+$ kubectl apply -f mq_psp.yaml -n stocktrader
+podsecuritypolicy "mq-psp" created
+```
+
+3. Create the role to use the Pod Security Policy just created:
+
+```
+$ kubectl -n stocktrader create role mq-role --verb=use --resource=podsecuritypolicy --resource-name=mq-psp
+role "mq-role" created
+```
+
+4. Create the role binding to assign the role created above that uses the Pod Security Policy created for db2 to the stocktrader service account:
+
+```
+$ kubectl -n stocktrader create rolebinding stocktrader-sa-mq-role --role=mq-role --serviceaccount=stocktrader:stocktrader-sa
+rolebinding "stocktrader-sa-mq-role" created
+```
+
+5. Install MQ using the [mq_values.yaml](installation/middleware/mq_values.yaml) file:
 
 ```
 $ helm install -n st-mq --namespace stocktrader --tls ibm-charts/ibm-mqadvanced-server-dev -f mq_values.yaml
 NAME:   st-mq
-LAST DEPLOYED: Thu Jun 28 16:38:22 2018
+LAST DEPLOYED: Fri Jan  4 12:04:47 2019
 NAMESPACE: stocktrader
 STATUS: DEPLOYED
 
 RESOURCES:
 ==> v1/Secret
 NAME          TYPE    DATA  AGE
-st-mq-ibm-mq  Opaque  1     4s
+st-mq-ibm-mq  Opaque  1     1s
 
 ==> v1/Service
-NAME          TYPE      CLUSTER-IP    EXTERNAL-IP  PORT(S)                        AGE
-st-mq-ibm-mq  NodePort  10.10.10.133  <none>       9443:31184/TCP,1414:32366/TCP  4s
+NAME                  TYPE       CLUSTER-IP       EXTERNAL-IP  PORT(S)                        AGE
+st-mq-ibm-mq-metrics  ClusterIP  192.168.128.147  <none>       9157/TCP                       1s
+st-mq-ibm-mq          NodePort   192.168.128.118  <none>       9443:30379/TCP,1414:32637/TCP  1s
 
-==> v1beta2/StatefulSet
+==> v1/StatefulSet
 NAME          DESIRED  CURRENT  AGE
-st-mq-ibm-mq  1        1        4s
+st-mq-ibm-mq  1        1        1s
 
 ==> v1/Pod(related)
-NAME            READY  STATUS   RESTARTS  AGE
-st-mq-ibm-mq-0  0/1    Running  0         4s
+NAME            READY  STATUS             RESTARTS  AGE
+st-mq-ibm-mq-0  0/1    ContainerCreating  0         1s
 
 
 NOTES:
@@ -246,103 +307,207 @@ If you set an app password, you can retrieve it by running the following:
     MQ_APP_PASSWORD=$(kubectl get secret --namespace stocktrader st-mq-ibm-mq -o jsonpath="{.data.appPassword}" | base64 --decode; echo)
 ```
 
-**IMPORTANT:** The `mq_values.yaml` file used to install the IBM Message Queue Helm chart into our IBM Cloud Private (ICP) cluster is configured to install a non-persistent IBM Message Queue due to some problems between IBM MQ and GlusterFS.
-
 2. We now need to create the **NotificationQ** message queue and the **app** message queue user (with the appropriate permissions). For doing so we need to interact with our IBM Message Queue instance we just deployed above through its web console.
 
-For accessing the IBM MQ web console, we need to
+   1. For accessing the IBM MQ web console, we need to [expose a route in OpenShift](https://docs.openshift.com/enterprise/3.1/dev_guide/routes.html):
 
-- Grab our IBM Cloud Private (ICP) proxy's IP:
+   ```
+   $ oc apply -f mq_route.yaml -n stocktrader
+   route.route.openshift.io/st-mq-ibm-mq created
+   ```
 
-```
-$ kubectl get nodes -l proxy=true             
-NAME            STATUS    AGE       VERSION
-172.16.40.176   Ready     57d       v1.9.1+icp-ee
-172.16.40.177   Ready     57d       v1.9.1+icp-ee
-172.16.40.178   Ready     57d       v1.9.1+icp-ee
-```
-In this case, we have three proxy nodes in our IBM Cloud Private (ICP) highly available cluster. We are going to use the first proxy node with IP `172.16.40.176` to access any resource we need within our ICP cluster (bearing in mind we could use any of the others and the result would be the same).
+   2. Grab the `host` attribute of the route created (in our case is `st-mq-ibm-mq-stocktrader.app39.jkwong.cloudns.cx`):
 
-- Grab the NodePort for our recently installed IBM Message Queue instance. We can see that NodePort from the output we obtain when we executed the Helm install command under the services section and right beside the internal **9443** port:
+   ```
+   $ oc get routes -n stocktrader                        
+   NAME           HOST/PORT                                          PATH      SERVICES       PORT            TERMINATION   WILDCARD
+   st-mq-ibm-mq   st-mq-ibm-mq-stocktrader.app39.jkwong.cloudns.cx             st-mq-ibm-mq   console-https   passthrough   None
+   ```
 
-```
-==> v1/Service
-NAME          TYPE      CLUSTER-IP    EXTERNAL-IP  PORT(S)                        AGE
-st-mq-ibm-mq  NodePort  10.10.10.133  <none>       9443:31184/TCP,1414:32366/TCP  4s
-```
-
-That is, the NodePort for accessing our IBM MQ deployment from the outside is **31184**
-
-- Access the IBM MQ web console pointing your browser to https://<proxy_ip>:<mq_nodeport>/ibmmq/console
+   3. Access the IBM MQ web console pointing your browser (**https**)to your host above:
 
 ![mq-web-console](images/resiliency1.png)
 
-and using `admin` as the user and `passw0rd` as its password (Anyway, you could also find out what the password is by following the instructions the Helm install command for IBM MQ displayed).
+   and using `admin` as the user and `passw0rd` as its password (Anyway, you could also find out what the password is by following the instructions the Helm install command for IBM MQ displayed).
 
-- Once you log into the IBM MQ web console, find out the **Queues on trader** widget/portlet and clieck on `Create` on the top right corner:
+   4. Once you log into the IBM MQ web console, find out the **Queues on trader** widget/portlet and clieck on `Create` on the top right corner:
 
 <p align="center">
 <img alt="create-queue" src="images/resiliency2.png" width="600"/>
 </p>
 
-- Enter **NotificationQ** on the dialog that pops up and click create:
+   5. Enter **NotificationQ** on the dialog that pops up and click create:
 
 <p align="center">
 <img alt="queue-name" src="images/resiliency3.png" width="600"/>
 </p>
 
-- On the Queues on trader widget/portlet again, click on the dashes icon and then on the **Manage authority records...** option within the dropdown menu:
+   6. On the Queues on trader widget/portlet again, click on the dashes icon and then on the **Manage authority records...** option within the dropdown menu:
 
 <p align="center">
 <img alt="authority" src="images/resiliency4.png" width="600"/>
 </p>
 
-- On the new dialog that opens up, click on **Create** on the top right corner. This will also open up a new dialog to introduce the **Entity name**. Enter **app** as the Entity name and click on create
+   7. On the new dialog that opens up, click on **Create** on the top right corner. This will also open up a new dialog to introduce the **Entity name**. Enter **app** as the Entity name and click on create
 
 <p align="center">
 <img alt="entity-name" src="images/resiliency5.png" width="600"/>
 </p>
 
-- Back to the first dialog that opened up, verify the new app entity appears listed, click on it and select **Browse, Inquire, Get and Put** on the right bottom corner as the MQI permissions for the app entity and click on Save:
+   8. Back to the first dialog that opened up, verify the new app entity appears listed, click on it and select **Browse, Inquire, Get and Put** on the right bottom corner as the MQI permissions for the app entity and click on Save:
 
 <p align="center">
 <img alt="mqi-permissions" src="images/resiliency6.png" width="600"/>
 </p>
+
+#### IBM ODM
+
+1. Log into the IBM Cloud Private web console and click on **Catalog** on the top right corner.
+
+2. Search for `ODM` and click on it:
+
+![odm-install-1](images/odm_install_1.png)
+
+3. Click on **Configure** on the bottom right corner.
+
+4. Use `st-odm` as your Helm release name and `stocktrader` as your target namespace. Also, click the License checkbox:
+
+![odm-install-2](images/odm_install_2.png)
+
+5. Click on All parameters dropdown menu to expand all the configuration options.
+
+6. Scroll down to the `H2 internal database` section and deselect the `Populate sample data` and `Enable persistence in persistent volume`:
+
+![odm-install-3](images/odm_install_3.png)
+
+7. Click on **Install** at the bottom right of the screen.
+
+8. Wait for ICP to kick off the installation and then click on the `View Helm Release` button that the popup window displays.
+
+![odm-install-4](images/odm_install_4.png)
+
+9. Check out the IBM ODM pods, deployment, etc look good.
+
+![odm-install-5](images/odm_install_5.png)
+
+
+10. We now need to import the already developed loyalty level IBM ODM project which our IBM StockTrader Application will use to determine what loyalty level a trader belongs to. To import such project:
+
+   1. Download the project from this [link](https://github.com/IBMStockTrader/portfolio/blob/master/stock-trader-loyalty-decision-service.zip)
+
+   2. Access the IBM ODM web console by [exposing a route in OpenShift](https://docs.openshift.com/enterprise/3.1/dev_guide/routes.html):
+
+   ```
+   $ oc apply -f odm_route.yaml -n stocktrader
+   route.route.openshift.io/st-odm-ibm-odm-dev created
+   ```
+
+   3. Grab the `host` attribute of the route created (in our case is `st-odm-ibm-odm-dev-stocktrader.app39.jkwong.cloudns.cx`):
+
+   ```
+   $ oc get routes -n stocktrader
+   NAME                 HOST/PORT                                                PATH      SERVICES             PORT            TERMINATION   WILDCARD
+   st-mq-ibm-mq         st-mq-ibm-mq-stocktrader.app39.jkwong.cloudns.cx                   st-mq-ibm-mq         console-https   passthrough   None
+   st-odm-ibm-odm-dev   st-odm-ibm-odm-dev-stocktrader.app39.jkwong.cloudns.cx             st-odm-ibm-odm-dev   9060            edge          None
+   ```
+
+   4. Access the IBM MQ web console pointing your browser (**https**) to your host above:
+
+![odm](images/resiliency7.png)
+
+   **IMPORTANT:** There are a couple of redirections being made by your browser while using the IBM ODM web console where **port 80 is appended** to the url. Please, **remove the port and hit enter** if that happens.
+
+   5. Click on **Decision Center Business Console** and log into it using the credentials from the Helm install command output above (`odmAdmin/odmAdmin`).
+
+![odm-install-6](images/odm_install_6.png)
+
+
+  6. Once you are logged in, click on the **LIBRARY** tab at the top menu and then click on the arrow on the left top corner to import a new project.
+
+<p align="center">
+<img alt="odm-import" src="images/resiliency8.png" width="600"/>
+</p>
+
+   7. On the dialog that pops up, click on `Choose...` and select the **stock-trader-loyalty-decision-service.zip** file you downloaded above. Click on Import.
+
+<p align="center">
+<img alt="odm-choose" src="images/resiliency9.png" width="500"/>
+</p>
+
+   8. Once the stock-trader-loyalty-decision-service project is imported, you should be redirected into that project within the **Library section** of the Decision Center Business Console. You should see there an icon that says **main**. Click on it.
+
+![odm-library](images/resiliency10.png)
+
+   9. The above should have opened the **main** workflow of the stock-trader-loyalty-decision-service project. Now, click on **Deploy** at the top to actually deploy the stock-trader-loyalty-decision-service into the IBM Operational Decision server.
+
+![odm-deploy](images/resiliency11.png)
+
+   10. A new dialog will pop up with the **specifics** on how to deploy the main branch for the stock-trader-loyalty-decision-service. Leave it as it is and click on Deploy.
+
+<p align="center">
+<img alt="odm-deploy-specifics" src="images/resiliency12.png" width="600"/>
+</p>
+
+   11. Finally, you should see a **Deployment status** dialog confirming that the deployment of the stock-trader-loyalty-decision-service project (actually called ICP-Trader-Dev-1) has started. Click OK to close the dialog.
+
+<p align="center">
+<img alt="odm-status" src="images/resiliency13.png" width="600"/>
+</p>
+
+At this point we should have an instance of the IBM Operation Decision Manager deployed into out IBM Cloud Private (ICP) cluster, the stock-trader-loyalty-decision-service project (actually called ICP-Trader-Dev-1) imported into it and deployed to the Operation Decision server for the IBM StockTrader Application to use it for calculating the loyalty of the portfolios.
+
+In order to make sure of the aforementioned, we are going to poke the IBM ODM endpoint for our loyalty service to see what it returns. To poke the endpoint, execute
+
+```
+$  curl -k -X POST -d '{ "theLoyaltyDecision": { "tradeTotal": 75000 } }' -H "Content-Type: application/json" https://<ROUTE_HOST>/DecisionService/rest/ICP_Trader_Dev_1/determineLoyalty
+```
+where `<ROUTE_HOST>` is the host field when we exposed the IBM ODM service previously and which in our case it is `st-odm-ibm-odm-dev-stocktrader.app39.jkwong.cloudns.cx`
+
+The `curl` request should return a **SILVER** loyalty on a JSON obsect similar to the following:
+
+```
+$ curl -k -X POST -d '{ "theLoyaltyDecision": { "tradeTotal": 75000 } }' -H "Content-Type: application/json" https://st-odm-ibm-odm-dev-stocktrader.app39.jkwong.cloudns.cx/DecisionService/rest/ICP_Trader_Dev_1/determineLoyalty
+{"__DecisionID__":"c125bf33-6108-48d6-8457-a88ffabab33b0","theLoyaltyDecision":{"tradeTotal":75000,"loyalty":"SILVER","message":null}}%
+```
 
 #### Redis
 
 1. Install Redis using the [redis_values.yaml](installation/middleware/redis_values.yaml) file:
 
 ```
-$ helm install -n st-redis --namespace stocktrader --tls stable/redis -f redis_values.yaml
+$ helm install -n st-redis --namespace stocktrader --tls stable/redis -f redis_values1.yaml
 NAME:   st-redis
-E0628 18:14:21.431010   11573 portforward.go:303] error copying from remote stream to local connection: readfrom tcp4 127.0.0.1:55225->127.0.0.1:55228: write tcp4 127.0.0.1:55225->127.0.0.1:55228: write: broken pipe
-LAST DEPLOYED: Thu Jun 28 18:14:19 2018
+LAST DEPLOYED: Fri Jan  4 14:36:41 2019
 NAMESPACE: stocktrader
 STATUS: DEPLOYED
 
 RESOURCES:
 ==> v1/Secret
 NAME      TYPE    DATA  AGE
-st-redis  Opaque  1     3s
+st-redis  Opaque  1     1s
+
+==> v1/ConfigMap
+NAME             DATA  AGE
+st-redis         3     1s
+st-redis-health  3     1s
 
 ==> v1/Service
-NAME             TYPE       CLUSTER-IP    EXTERNAL-IP  PORT(S)   AGE
-st-redis-master  ClusterIP  10.10.10.4    <none>       6379/TCP  3s
-st-redis-slave   ClusterIP  10.10.10.191  <none>       6379/TCP  3s
+NAME             TYPE       CLUSTER-IP       EXTERNAL-IP  PORT(S)   AGE
+st-redis-master  ClusterIP  192.168.128.139  <none>       6379/TCP  1s
+st-redis-slave   ClusterIP  192.168.128.81   <none>       6379/TCP  1s
 
 ==> v1beta1/Deployment
 NAME            DESIRED  CURRENT  UP-TO-DATE  AVAILABLE  AGE
-st-redis-slave  1        1        1           0          3s
+st-redis-slave  1        1        1           0          1s
 
 ==> v1beta2/StatefulSet
 NAME             DESIRED  CURRENT  AGE
-st-redis-master  1        1        3s
+st-redis-master  1        1        1s
 
 ==> v1/Pod(related)
 NAME                             READY  STATUS             RESTARTS  AGE
-st-redis-slave-5866f6f889-5c2cc  0/1    ContainerCreating  0         3s
-st-redis-master-0                0/1    Pending            0         3s
+st-redis-slave-64cbf5bdb5-j7f65  0/1    ContainerCreating  0         1s
+st-redis-master-0                0/1    ContainerCreating  0         1s
 
 
 NOTES:
@@ -361,9 +526,9 @@ To connect to your Redis server:
 
 1. Run a Redis pod that you can use as a client:
 
-   kubectl run --namespace stocktrader st-redis-client --rm --tty -i \
+   kubectl run --namespace stocktrader st-redis-client --rm --tty -i --restart='Never' \
     --env REDIS_PASSWORD=$REDIS_PASSWORD \
-   --image docker.io/bitnami/redis:4.0.10 -- bash
+   --image docker.io/bitnami/redis:4.0.12 -- bash
 
 2. Connect using the Redis CLI:
    redis-cli -h st-redis-master -a $REDIS_PASSWORD
@@ -371,139 +536,8 @@ To connect to your Redis server:
 
 To connect to your database from outside the cluster execute the following commands:
 
-    export POD_NAME=$(kubectl get pods --namespace stocktrader -l "app=redis" -o jsonpath="{.items[0].metadata.name}")
-    kubectl port-forward --namespace stocktrader $POD_NAME 6379:6379
+    kubectl port-forward --namespace stocktrader svc/st-redis 6379:6379 &
     redis-cli -h 127.0.0.1 -p 6379 -a $REDIS_PASSWORD
-```
-
-**IMPORTANT:** The Redis instance installed is a non-persistent non-HA Redis Redis deployment
-
-#### IBM ODM
-
-1. Install IBM Operational Decision Manager (ODM) using the [odm_values.yaml](installation/middleware/odm_values.yaml) file:
-
-```
-$ helm install -n st-odm --namespace stocktrader --tls ibm-charts/ibm-odm-dev -f odm_values.yaml
-NAME:   st-odm
-LAST DEPLOYED: Thu Jun 28 18:53:45 2018
-NAMESPACE: stocktrader
-STATUS: DEPLOYED
-
-RESOURCES:
-==> v1/ConfigMap
-NAME                       DATA  AGE
-st-odm-odm-test-configmap  2     3s
-
-==> v1/Service
-NAME                TYPE      CLUSTER-IP   EXTERNAL-IP  PORT(S)         AGE
-st-odm-ibm-odm-dev  NodePort  10.10.10.39  <none>       9060:32265/TCP  3s
-
-==> v1beta1/Deployment
-NAME                DESIRED  CURRENT  UP-TO-DATE  AVAILABLE  AGE
-st-odm-ibm-odm-dev  1        1        1           1          3s
-
-==> v1/Pod(related)
-NAME                                 READY  STATUS   RESTARTS  AGE
-st-odm-ibm-odm-dev-6699d55df5-fv9lv  1/1    Running  0         3s
-
-
-NOTES:
-st-odm is ready to use. st-odm is an instance of the ibm-odm-dev chart.
-
-st-odm uses version 8.9.2 of the IBM® Operational Decision Manager (ODM) components.
-
-ODM Information
-----------------
-
-Username/Password :
-  - For Decision Center : odmAdmin/odmAdmin
-  - For Decision Server Console: odmAdmin/odmAdmin
-  - For Decision Server Runtime: odmAdmin/odmAdmin
-  - For Decision Runner: odmAdmin/odmAdmin
-
-Get the application URLs by running these commands:
-
-  export NODE_PORT=$(kubectl get --namespace stocktrader -o jsonpath="{.spec.ports[0].nodePort}" services st-odm-ibm-odm-dev)
-  export NODE_IP=$(kubectl get nodes --namespace stocktrader -o jsonpath="{.items[0].status.addresses[0].address}")
-
-  -- Decision Center Business Console
-  echo http://$NODE_IP:$NODE_PORT/decisioncenter
-
-  -- Decision Center Enterprise Server
-  echo http://$NODE_IP:$NODE_PORT/teamserver
-
-  -- Decision Server Console
-  echo http://$NODE_IP:$NODE_PORT/res
-
-  -- Decision Server Runtime
-  echo http://$NODE_IP:$NODE_PORT/DecisionService
-
-  -- Decision Runner
-  echo http://$NODE_IP:$NODE_PORT/DecisionRunner
-
-To learn more about the st-odm release, try:
-
-  $ helm status st-odm
-  $ helm get st-odm
-```
-
-**IMPORTANT:** The IBM Operational Decision Manager (ODM) installed is a non-persistent IBM ODM deployment.
-
-2. We now need to import the already developed loyalty level IBM ODM project which our IBM StockTrader Application will use. To import the such project:
-
-- Download the project from this [link](https://github.com/IBMStockTrader/portfolio/blob/master/stock-trader-loyalty-decision-service.zip)
-
-- Open the IBM Operational Decision Manager by pointing your browser to http://<proxy_ip>:<odm_nodeport> where the `<proxy_ip>` can be obtained as explained in the [IBM MQ installation](#ibm-mq) previous section above and the `<odm_nodeport>` can be obtained under the service section from the output of the Helm install command for IBM ODM above in this section. More precisely, we can see above that in our case `<odm_nodeport>` is **32265**.
-
-![odm](images/resiliency7.png)
-
-- Click on **Decision Center Business Console** and log into it using the credentials from the Helm install command output above (`odmAdmin/odmAdmin`).
-
-- Once you are logged in, click on the arrow on the left top corner to import a new project.
-
-<p align="center">
-<img alt="odm-import" src="images/resiliency8.png" width="600"/>
-</p>
-
-- On the dialog that pops up, click on `Choose...` and select the **stock-trader-loyalty-decision-service.zip** file you downloaded above. Click on Import.
-
-<p align="center">
-<img alt="odm-choose" src="images/resiliency9.png" width="500"/>
-</p>
-
-- Once the stock-trader-loyalty-decision-service project is imported, you should be redirected into that project within the **Library section** of the Decision Center Business Console. You should see there an icon that says **main**. Click on it.
-
-![odm-library](images/resiliency10.png)
-
-- The above should have opened the **main** workflow of the stock-trader-loyalty-decision-service project. Now, click on **Deploy** at the top to actually deploy the stock-trader-loyalty-decision-service into the IBM Operational Decision server.
-
-![odm-deploy](images/resiliency11.png)
-
-- A new dialog will pop up with the **specifics** on how to deploy the main branch for the stock-trader-loyalty-decision-service. Leave it as it is and click on Deploy.
-
-<p align="center">
-<img alt="odm-deploy-specifics" src="images/resiliency12.png" width="600"/>
-</p>
-
-- Finally, you should see a **Deployment status** dialog confirming that the deployment of the stock-trader-loyalty-decision-service project (actually called ICP-Trader-Dev-1) has started. Click OK to close the dialog.
-
-<p align="center">
-<img alt="odm-status" src="images/resiliency13.png" width="600"/>
-</p>
-
-At this point we should have an instance of the IBM Operation Decision Manager deployed into out IBM Cloud Private (ICP) cluster, the stock-trader-loyalty-decision-service project (actually called ICP-Trader-Dev-1) imported into it and deployed to the Operation Decision server for the IBM StockTrader Application to use it for calculating the loyalty of the portfolios.
-
-In order to make sure of the aforementioned, we are going to poke the IBM ODM endpoint for our loyalty service to see what it returns. To poke the endpoint, execute
-
-```
-$ curl -X POST -d '{ "theLoyaltyDecision": { "tradeTotal": 75000 } }' -H "Content-Type: application/json" http://<proxy_ip>:<odm_nodeport>/DecisionService/rest/ICP_Trader_Dev_1/determineLoyalty
-```
-where we have already explained how to obtain `<proxy_ip>` and `<odm_nodepot>` few steps above.
-
-The `curl` request should return a **SILVER** loyalty on a JSON obsect similar to the following:
-
-```
-{"__DecisionID__":"3d18f834-0095-4821-8e1b-157f41ee1ee80","theLoyaltyDecision":{"tradeTotal":75000,"loyalty":"SILVER","message":null}}
 ```
 
 **We have finally installed all the middleware** the IBM StockTrader Application depends on in order to function properly. Let's now move on to install the IBM StockTrader Application.
@@ -512,150 +546,9 @@ The `curl` request should return a **SILVER** loyalty on a JSON obsect similar t
 
 The IBM StockTrader Application can be deployed to IBM Cloud Private (ICP) using Helm charts. All the microservices that make up the application have been packaged into a Helm chart. They could be deployed individually using their Helm chart or they all can be deployed at once using the main umbrella IBM StockTrader Application Helm chart which is stored in this repository under the **chart/stocktrader-app** folder. This Helm chart, along with each IBM StockTrader Application microservice's Helm chart, is latter packaged and stored in the IBM StockTrader Helm chart repository at https://github.com/ibm-cloud-architecture/stocktrader-helm-repo/
 
-As we have done for the middleware pieces installed on the previous section, the IBM StockTrader Application installation will be done by passing the desired values/configuration for some its components through a values file called [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml). This way, the IBM StockTrader Application Helm chart is the template/structure/recipe of what components and Kubernetes resources the IBM StockTrader Application is made up of while the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file specifies the configuration these need to take based on your credentials, environments, needs, etc.
-
-As a result, we need to look at the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file to make sure the middleware configuration matches how we have deployed such middleware in the previous section and **provide the appropriate configuration and credentials for the services the IBM StockTrader Application integrates with**.
-
-#### Configure
-
-The following picture shows the points where we need to provide configuration/credentials for in the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file to successfully install the IBM StockTrader Application:
-
-<p align="center">
-<img alt="st-integration" src="images/stocktrader_integration.png"/>
-</p>
-
-Now we look at each of the above points in the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file to see what we need to provide.
-
-**IMPORTANT:** The **values for the variables belonging to secrets** in the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file **must be base64 encoded**. As a result, whatever the value you want to set the following **secret variables** with, they first need to be encoded using this command:
-
-```
-echo -n "<the_value_you_want_to_encode>" | base64
-```
-
-1. **IBMid:** IBMid is the authentication and authorisation provider for the `latest` version (docker image tag) of the Tradr BFF or Trader BFF microservices (there is a `basicregistry` version of the Trader BFF microservice that uses `stock/trader` user/password to gain access to the IBM StockTrader Application which we will talk more about it later in this section).
-
-Here we need to provide our IBMid SSO configuration and credentials which our two Backend For Frontend (BFF) microservices Trader and Tradr will use to authenticate and authorise users through the Open ID Connect (OIDC) protocol. Follow this [link](https://w3-connections.ibm.com/wikis/home?lang=en-us#!/wiki/BlueID%20Single%20Sign-On%20%28SSO%29%20Self-Boarding%20Process/page/SSO%20with%20blueID%20%28IBM%20ID%29) to set your IBMid service instance up. **IMPORTANT:** Please, choose the **blueID PreProduction** identity provider since that is the one to use for testing and also does not require any approval. Also, provide the redirect URIs for the Trader and Tradr BFF microservices as follows respectively:
-
-```
-https://stocktrader.ibm.com/ibm/api/social-login/redirect/IBMid
-https://stocktrader.ibm.com/tradr/auth/sso/callback
-```
-
-where `stocktrader.ibm.com` **must be added to your hosts file** to point to your ICP Proxy node IP (or one of them). In order to find out what are your ICP proxy node(s) IP address(es):
-
-```
-$ kubectl get nodes -l proxy=true
-NAME            STATUS    AGE       VERSION
-172.16.50.173   Ready     18d       v1.10.0+icp-ee
-172.16.50.174   Ready     18d       v1.10.0+icp-ee
-172.16.50.175   Ready     18d       v1.10.0+icp-ee
-```
-
-we are going to use the first one: `172.16.50.173` in our hosts file:
-
-```
-$ cat /etc/hosts
-##
-# Host Database
-#
-# localhost is used to configure the loopback interface
-# when the system is booting.  Do not change this entry.
-##
-127.0.0.1	localhost
-255.255.255.255	broadcasthost
-::1             localhost
-172.16.50.173   stocktrader.ibm.com
-```
-(\*) If you don't know how to edit your hosts file, google is plenty of guidance such as this [link](https://www.howtogeek.com/howto/27350/beginner-geek-how-to-edit-your-hosts-file/).
-
-In the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file complete the following configuration/credentials:
-
-```
-oidc:
-  # Your IBMid SSO ClientId
-  id:
-  # Your IBMid SSO clientSecret
-  secret:
-```
-
-Once again, the IBMid provider and the corresponding `oidc` section within the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file needs to be configured if we plan to use the `latest` version of the Tradr BFF or Trader BFF microservices. There is a `basicregistry` version of the Trader BFF microservice that uses `stock/trader` user/password to gain access to the IBM StockTrader Application bypassing IBMid Open ID connect authentication and authorisation mechanism. **Either way, you must configure your hosts file.**
-
-2. **IBM Watson:** One of the use cases the IBM StockTrader Application implements in its version 2 is a feedback mechanism whereby it adjusts the stock quote fee based on users feedback tone analysis. For doing so, the feedback is analysed with the [IBM Watson Tone Analyzer service](https://www.ibm.com/watson/services/tone-analyzer/) wich we need to sign up for. You can sign up and get your credentials to use the IBM Watson Tone Analyzer in this [link](https://console.bluemix.net/catalog/services/tone-analyzer).
-
-In the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file complete the following configuration/credentials:
-
-```
-watson:
-    id:
-    pwd:
-```
-
-3. **IBM Functions:** We are using IBM Functions in the IBM StockTrader Application to trigger a loyalty level change notification to the Slack messenger application. As a result, you need to set up a rest callable sequence (PostStatusToSlack) that contains two actions:
-
-<p align="center">
-<img alt="ibm-functions" src="images/IBM_Functions.png"/>
-</p>
-
-- A NodeJS action (Notify), which will receive the JSON (from the messaging microservice) with the values to output the message we want to post to slack
-
-<p align="center">
-<img alt="notify" src="images/notify.png"/>
-</p>
-
-- A binding action to Slack that will get configured with the [Slack Incoming WebHook](https://api.slack.com/incoming-webhooks) for the Slack channel the notification will get posted to.
-
-<p align="center">
-<img alt="post" src="images/post.png"/>
-</p>
-
-For more information on how to create the above, follow this [blog](https://www.ibm.com/developerworks/community/blogs/5092bd93-e659-4f89-8de2-a7ac980487f0/entry/Serverless_computing_and_OpenWhisk?lang=en).
-
-Once you have your IBM Functions flow implemented, complete the following configuration/credentials in the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file:
-
-```
-openwhisk:
-  url:
-  id:
-  pwd:
-```
-4. **Twitter:** The IBM StockTrader Application can also use Twitter to notify portfolio loyalty level changes. In order to get notified in Twitter, you must have a [Twitter account](https://help.twitter.com/en/create-twitter-account) and register/create a [Twitter application](https://developer.twitter.com/en/docs/basics/getting-started) on it which is the one that will tweet on your behalf and the one that the IBM StockTrader application will talk to.
-
-Once you have your Twitter account and Twitter application set up, complete the following configuration/credentials in the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file:
-
-```
-twitter:
-  consumerKey:
-  consumerSecret:
-  accessToken:
-  accessTokenSecret:
-```
-
-5. **Trader:** As previously mentioned in the **IBMid** first point, if we don't want to use the IBMid provider service to authenticate and authorise users through the Open ID Connect protocol, we must specify that the version of the trader BFF that we want to get deployed is the `basicregistry` version. This has to be the value for the **tag** attribute within the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file:
-
-```
-trader:
-  image:
-    tag:
-```
-
-(\*) **tag** is set to `basicregistry` by default since we already have the NodeJS Tradr BFF set up to use the IBMid provider service out of the box.
-
-6. **Notification Route:** Finally, we must set the notification route we want the IBM StockTrader Application to use as the endpoints for the portfolio loyalty level change notifications. It can be either **Slack or Twitter**. For selecting one or the other turn the appropriate option to true in the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file:
-
-```
-route:
-  slack:
-    enabled: false
-  twitter:
-    enabled: false
-```
-**IMPORTANT:** Unfortunately, the Slack and Twitter notification routes are **mutually exclusive** and **only one can be set to true**.
-
-**TIP:** The above configuration/values in the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file are overwritten by the **--set variable=value** flag if used during the **helm install** command. This way, you don't need to open, modify, save and close the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file everytime you want to install the IBM StockTrader Application. Instead, you could pass the desired values to certain variables using the **--set variable=value** flag as we are now going to see for the IBM StockTrader Application notification route during the install section down below.
+As we have done for the middleware pieces installed on the previous section, the IBM StockTrader Application installation will be done by passing the desired values/configuration for some of its components through a values file called [st_app_values_v2_rhos.yaml](installation/application/st_app_values_v2_rhos.yaml). This way, the IBM StockTrader Application Helm chart is the template/structure/recipe of what components and Kubernetes resources the IBM StockTrader Application is made up of while the [st_app_values_v2_rhos.yaml](installation/application/st_app_values_v2_rhos.yaml) file specifies the configuration these need to take based on your credentials, environments, needs, etc.
 
 #### Install
-
-Now that we are sure our configuration [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file looks good for both the middleware, IBM Cloud services and third party integrations, **let's deploy the IBM StockTrader Application!**
 
 1. Add the IBM StockTrader Helm repository:
 
@@ -669,64 +562,83 @@ stocktrader                      	https://raw.githubusercontent.com/ibm-cloud-ar
 ibm-charts              	https://raw.githubusercontent.com/IBM/charts/master/repo/stable/  
 ```
 
-2. Deploy the IBM StockTrader Application using the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file:
-
-**TIP:** Remember you can use the **--set variable=value** to overwrite values within the [st_app_values_v2.yaml](installation/application/st_app_values_v2.yaml) file.
+2. Change to the following where the [st_app_values_v2_rhos.yaml](installation/application/st_app_values_v2_rhos.yaml) file is located:
 
 ```
-$ helm install -n test --tls --namespace stocktrader -f st_app_values_v2.yaml stocktrader/stocktrader-app --version "0.2.0" --set route.twitter.enabled=true --set trader.image.tag=basicregistry
-NAME:   test
-LAST DEPLOYED: Mon Jul  2 13:39:28 2018
+$ cd <PATH_WHERE_YOU_CLONED>/stocktrader-app/installation/application
+```
+
+3. Deploy the IBM StockTrader Application using the [st_app_values_v2_rhos.yaml](installation/application/st_app_values_v2_rhos.yaml) file:
+
+```
+$ helm install -n stocktrader --tls --namespace stocktrader -f st_app_values_v2_rhos.yaml stocktrader/stocktrader-app --version "0.2.0" --set route.slack.enabled=true --set trader.image.tag=basicregistry
+NAME:   stocktrader
+LAST DEPLOYED: Fri Jan  4 16:56:19 2019
 NAMESPACE: stocktrader
 STATUS: DEPLOYED
 
 RESOURCES:
 ==> v1/Secret
-NAME                       TYPE    DATA  AGE
-stocktrader-db2            Opaque  5     4s
-strocktrader-ingress-host  Opaque  1     4s
-stocktrader-jwt            Opaque  2     4s
-stocktrader-mq             Opaque  7     4s
-stocktrader-odm            Opaque  1     4s
-stocktrader-oidc           Opaque  8     4s
-stocktrader-redis          Opaque  2     4s
-stocktrader-twitter        Opaque  4     4s
-stocktrader-watson         Opaque  3     4s
+NAME                      TYPE    DATA  AGE
+stocktrader-db2           Opaque  5     2s
+stocktrader-ingress-host  Opaque  1     2s
+stocktrader-jwt           Opaque  2     2s
+stocktrader-mq            Opaque  7     2s
+stocktrader-odm           Opaque  1     2s
+stocktrader-oidc          Opaque  8     2s
+stocktrader-openwhisk     Opaque  3     2s
+stocktrader-redis         Opaque  2     2s
+stocktrader-watson        Opaque  3     2s
 
 ==> v1/Service
-NAME                  TYPE       CLUSTER-IP    EXTERNAL-IP  PORT(S)                        AGE
-notification-service  ClusterIP  10.10.10.171  <none>       9080/TCP,9443/TCP              4s
-portfolio-service     ClusterIP  10.10.10.105  <none>       9080/TCP,9443/TCP              4s
-stock-quote-service   ClusterIP  10.10.10.210  <none>       9080/TCP,9443/TCP              4s
-trader-service        NodePort   10.10.10.22   <none>       9080:31507/TCP,9443:32370/TCP  4s
-tradr-service         NodePort   10.10.10.58   <none>       3000:31007/TCP                 4s
+NAME                  TYPE       CLUSTER-IP       EXTERNAL-IP  PORT(S)            AGE
+notification-service  ClusterIP  192.168.128.63   <none>       9080/TCP,9443/TCP  2s
+portfolio-service     ClusterIP  192.168.128.67   <none>       9080/TCP,9443/TCP  2s
+stock-quote-service   ClusterIP  192.168.128.220  <none>       9080/TCP,9443/TCP  2s
+trader-service        ClusterIP  192.168.128.56   <none>       9080/TCP,9443/TCP  2s
+tradr-service         ClusterIP  192.168.128.4    <none>       3000/TCP           2s
 
 ==> v1beta1/Deployment
-NAME                       DESIRED  CURRENT  UP-TO-DATE  AVAILABLE  AGE
-test-messaging             1        1        1           0          4s
-test-notification-twitter  1        1        1           0          4s
-test-portfolio             1        1        1           0          4s
-test-stock-quote           1        1        1           0          4s
-test-trader                1        1        1           1          4s
-test-tradr                 1        1        1           1          4s
+NAME                     DESIRED  CURRENT  UP-TO-DATE  AVAILABLE  AGE
+stocktrader-messaging           1        1        1           0          2s
+stocktrader-notification-slack  1        1        1           0          2s
+stocktrader-portfolio           1        1        1           0          2s
+stocktrader-stock-quote         1        1        1           0          2s
+stocktrader-trader              1        1        1           0          2s
+stocktrader-tradr               1        1        1           0          2s
 
 ==> v1beta1/Ingress
 NAME            HOSTS  ADDRESS  PORTS  AGE
-test-portfolio  *      80       4s
-test-trader     *      80       4s
-test-tradr      *      80       4s
+stocktrader-portfolio  *      80       2s
+stocktrader-trader     *      80       2s
+stocktrader-tradr      *      80       2s
 
 ==> v1/Pod(related)
-NAME                                        READY  STATUS             RESTARTS  AGE
-test-messaging-644ccbcd95-mwkjh             0/1    ContainerCreating  0         4s
-test-notification-twitter-6dd5f9d7dc-bsfs7  0/1    ContainerCreating  0         4s
-test-portfolio-75b4dbd485-k6rq4             0/1    ContainerCreating  0         4s
-test-stock-quote-7679899d76-rgkwr           0/1    ContainerCreating  0         4s
-test-trader-5446499c5b-ldkjk                1/1    Running            0         4s
-test-tradr-548b58bc55-jjr4c                 1/1    Running            0         4s
+NAME                                     READY  STATUS             RESTARTS  AGE
+stocktrader-messaging-779bcbf4c9-25dwt          0/1    ContainerCreating  0         2s
+stocktrader-notification-slack-77f658bcc-pkxn9  0/1    ContainerCreating  0         2s
+stocktrader-portfolio-67c5d96cf4-424xl          0/1    ContainerCreating  0         2s
+stocktrader-stock-quote-9dc6db-jjwqb            0/1    ContainerCreating  0         2s
+stocktrader-trader-76cddc9847-fsrxr             0/1    ContainerCreating  0         2s
+stocktrader-tradr-75f699486c-dbpm4              0/1    ContainerCreating  0         2s
 ```
 
-(\*) As you can figure by the install command and the IBM StockTrader Application components we've got deployed, we chose the Twitter notification route. Hence, we've got deployed a secret called `stocktrader-twitter` and a deployment plus its corresponding pod(s) called `test-notification-twitter` as opposed to a secret called `stocktrader-openwhisk` and a deployment plus its corresponding pod(s) called `test-notification-slack`.
+4. Expose the application by exposing the `trader-service`:
+
+```
+$ oc apply -f stocktrader_route.yaml -n stocktrader
+route.route.openshift.io/trader-service created
+```
+
+ **IMPORTANT:** The web browser redirections tend to get **port 80 attached** to the url. If that happens, please remove the port and hit enter.
+
+
+ $ oc get routes -n stocktrader
+NAME                 HOST/PORT                                                PATH      SERVICES             PORT            TERMINATION   WILDCARD
+st-mq-ibm-mq         st-mq-ibm-mq-stocktrader.app39.jkwong.cloudns.cx                   st-mq-ibm-mq         console-https   passthrough   None
+st-odm-ibm-odm-dev   st-odm-ibm-odm-dev-stocktrader.app39.jkwong.cloudns.cx             st-odm-ibm-odm-dev   9060            edge          None
+trader-service       trader-service-stocktrader.app39.jkwong.cloudns.cx                 trader-service       http            edge          None
+
 
 ## Verification
 

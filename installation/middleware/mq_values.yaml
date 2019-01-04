@@ -17,15 +17,23 @@ license: "accept"
 
 image:
   # repository is the container repository to use, which must contain IBM MQ Advanced for Developers
-  # repository: registry.csplab.cloudns.cx:443/jesus/stocktrader-mq
   repository: ibmcom/mq
   # tag is the tag to use for the container repository
-  # tag: latest
-  tag: 9
+  tag: 9.1.1.0
   # pullSecret is the secret to use when pulling the image from a private registry
   pullSecret:
   # pullPolicy is either IfNotPresent or Always (https://kubernetes.io/docs/concepts/containers/images/)
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
+
+# Specify architecture (amd64, ppc64le, s390x) and weight to be  used for scheduling as follows :
+#   0 - Do not use
+#   1 - Least preferred
+#   2 - No preference
+#   3 - Most preferred
+arch:
+  amd64: "2 - No preference"
+  ppc64le: "2 - No preference"
+  s390x: "2 - No preference"
 
 # persistence section specifies persistence settings which apply to the whole chart
 persistence:
@@ -37,15 +45,14 @@ persistence:
 # dataPVC section specifies settings for the main Persistent Volume Claim, which is used for data in /var/mqm
 dataPVC:
   # name sets part of the name for this Persistent Volume Claim
-  name: "mqtest"
+  name: "data"
   ## storageClassName is the name of the Storage Class to use, or an empty string for no Storage Class
-  storageClassName: "glusterfs"
+  storageClassName: ""
   ## size is the minimum size of the Persistent Volume
   size: 2Gi
 
 service:
-  name: qmgr
-  type: NodePort
+  type: ClusterIP
 
 resources:
   limits:
@@ -54,6 +61,10 @@ resources:
   requests:
     cpu: 500m
     memory: 512Mi
+
+security:
+  # serviceAccountName is the name of the service account to use
+  serviceAccountName: "stocktrader-sa"
 
 # queueManager section specifies settings for the MQ Queue Manager
 queueManager:
@@ -66,8 +77,13 @@ queueManager:
     # appPassword sets the password of the app user
     appPassword:
 
-# nameOverride can be set to partially override the name of the resources created by this chart
-nameOverride: ibm-mq
+# log section specifies settings for MQ error logs
+log:
+  format: basic
+
+# metrics section specifies settings for generating queue manager metrics
+metrics:
+  enabled: true
 
 # livenessProbe section specifies setting for the MQ liveness probe, which checks for a running Queue Manager
 livenessProbe:
@@ -84,6 +100,5 @@ readinessProbe:
   timeoutSeconds: 3
   failureThreshold: 1
 
-# log section specifies settings for MQ error logs
-log:
-  format: basic
+# nameOverride can be set to partially override the name of the resources created by this chart
+nameOverride: "ibm-mq"
